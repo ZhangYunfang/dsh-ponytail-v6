@@ -192,6 +192,22 @@ console.log('\n11. workspace-precedence clause survives level filtering')
   check('off baseline carries no clause', baselineFor('off').includes('Workspace precedence') === false)
 }
 
+console.log('\n12. version strings agree across every manifest and the changelog')
+{
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+  const pluginManifest = JSON.parse(readFileSync(join(ROOT, 'dsh.plugin.json'), 'utf8'))
+  const changelog = readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8')
+  const semver = /^\d+\.\d+\.\d+$/
+  check(`package.json version "${pkg.version}" is semver`, semver.test(pkg.version))
+  check('dsh.plugin.json matches package.json', pluginManifest.version === pkg.version,
+    `plugin manifest says ${pluginManifest.version}`)
+  check('CHANGELOG has a heading for this version', changelog.includes(`## [${pkg.version}]`),
+    `no "## [${pkg.version}]" heading`)
+  check('dsh engines hint matches the manifest', pluginManifest.engines?.dsh === pkg.engines?.dsh,
+    `${pluginManifest.engines?.dsh} vs ${pkg.engines?.dsh}`)
+  check('compatibility matrix is declared', Object.keys(pkg.dsh?.compatibility?.dshReleases ?? {}).length > 0)
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed > 0) {
   console.log('VERIFY: FAIL')

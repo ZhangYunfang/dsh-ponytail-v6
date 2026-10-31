@@ -5,7 +5,7 @@
 | 层 | 命令 | 覆盖 |
 |---|---|---|
 | 单元测试 | `npm test` | 18 个纯函数/模块级用例 |
-| 静态验收 | `node scripts/verify.mjs` | 63 项断言（技能完整性、档位语义、命令解析、状态解析链） |
+| 静态验收 | `node scripts/verify.mjs` | 68 项断言（技能完整性、档位语义、命令解析、状态解析链） |
 | 宿主契约探针 | `node scripts/probe-host.mjs` | 37 项断言（真实 cordis + 真实 SystemPrompt + 真实 WebServer + 5 种 scope） |
 | 客户端探针 | `node scripts/probe-client.mjs` | 22 项断言（真实 React 18 渲染 + 面板 HTTP 函数对真实宿主） |
 

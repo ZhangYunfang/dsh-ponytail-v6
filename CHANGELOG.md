@@ -28,8 +28,11 @@
 
 ### Changed
 
-- `npm run verify` 现在是四层：静态 63 项 + 宿主探针 37 项 + 客户端探针 22 项，
+- `npm run verify` 现在是四层：静态 68 项 + 宿主探针 37 项 + 客户端探针 22 项，
   加上 `npm test` 的 18 个单元测试。
+- 静态验收新增**第 12 组：版本一致性**（`package.json` / `dsh.plugin.json` /
+  `CHANGELOG.md` 三者必须一致，`engines.dsh` 与兼容矩阵必须存在）。
+  加它的直接原因：本次升 1.1.0 时 `dsh.plugin.json` 漏改，靠人眼才发现。
 
 ### Known limits (still true)
 
