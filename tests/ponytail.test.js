@@ -12,6 +12,7 @@ import { WORKSPACE_PRECEDENCE, baselineFor, filterSkillBodyForMode, readSkillBod
 import { createCommandHandler, isDeactivationCommand, parseCommandInput, statusText } from '../lib/command.js'
 import { parseFrontmatter } from '../lib/frontmatter.js'
 import { createProvider, discoverSkills } from '../lib/provider.js'
+import { createDeactivationListener, isPreStepEnabled, lastUserText } from '../lib/prestep.js'
 import { MODES, createState, normalizeMode } from '../lib/state.js'
 
 test('frontmatter: folded description becomes one line', () => {
@@ -165,4 +166,92 @@ test('provider: skill bodies stay byte-identical to the lock', () => {
   for (const path of Object.keys(lock.files)) {
     assert.ok(readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').length > 0, path)
   }
+})
+
+// ---- regression: the v1.0.0 pre-step listener broke the waterfall -----------
+// `agent/pre-step` is a cooperative waterfall. A listener that returns undefined
+// makes the host throw "Cannot read properties of undefined (reading 'kind')" on
+// every step. These cases pin the contract.
+
+test('prestep: listener returns the decision produced by next()', async () => {
+  const state = createState({ env: {}, dir: mkdtempSync(join(tmpdir(), 'pt-ps-')) })
+  const listener = createDeactivationListener(state)
+  const decision = { kind: 'enter', messages: ['hello'] }
+  let calls = 0
+  const returned = await listener({ messages: [{ content: 'just a normal request' }] }, async () => {
+    calls += 1
+    return decision
+  })
+  assert.equal(calls, 1)
+  assert.equal(returned, decision, 'listener must return the SAME decision object')
+  assert.equal(state.snapshot().mode, 'full')
+  rmSync(join(tmpdir(), 'pt-ps-'), { recursive: true, force: true })
+})
+
+test('prestep: a reject decision passes through untouched', async () => {
+  const state = createState({ env: {}, dir: mkdtempSync(join(tmpdir(), 'pt-ps2-')) })
+  const listener = createDeactivationListener(state)
+  const decision = { kind: 'reject', reason: 'blocked' }
+  const returned = await listener({ messages: [] }, async () => decision)
+  assert.equal(returned, decision)
+  rmSync(join(tmpdir(), 'pt-ps2-'), { recursive: true, force: true })
+})
+
+test('prestep: deactivation phrase switches to off and still returns the decision', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pt-ps3-'))
+  const state = createState({ env: {}, dir })
+  const listener = createDeactivationListener(state)
+  const decision = { kind: 'enter', messages: [] }
+  const returned = await listener({ messages: [{ content: 'stop ponytail' }] }, async () => decision)
+  assert.equal(returned, decision)
+  assert.equal(state.snapshot().mode, 'off')
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('prestep: a mid-sentence phrase does not deactivate', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'pt-ps4-'))
+  const state = createState({ env: {}, dir })
+  const listener = createDeactivationListener(state)
+  await listener({ messages: [{ content: 'add a normal mode toggle to the UI' }] }, async () => ({ kind: 'enter', messages: [] }))
+  assert.equal(state.snapshot().mode, 'full')
+  rmSync(dir, { recursive: true, force: true })
+})
+
+test('prestep: a throwing state never breaks the returned decision', async () => {
+  const state = {
+    snapshot: () => ({ enabled: true, mode: 'full' }),
+    setMode: () => {
+      throw new Error('disk on fire')
+    },
+  }
+  const listener = createDeactivationListener(state)
+  const decision = { kind: 'enter', messages: [] }
+  const returned = await listener({ messages: [{ content: 'stop ponytail' }] }, async () => decision)
+  assert.equal(returned, decision)
+})
+
+test('prestep: without a continuation it stays inert instead of breaking', async () => {
+  const state = createState({ env: {}, dir: mkdtempSync(join(tmpdir(), 'pt-ps5-')) })
+  const listener = createDeactivationListener(state)
+  await assert.doesNotReject(() => listener({ messages: [] }))
+  assert.equal(await listener({ messages: [] }, undefined), undefined)
+  rmSync(join(tmpdir(), 'pt-ps5-'), { recursive: true, force: true })
+})
+
+test('prestep: opt-in is off by default', () => {
+  assert.equal(isPreStepEnabled({}), false)
+  assert.equal(isPreStepEnabled({ PONYTAIL_PRE_STEP: '0' }), false)
+  assert.equal(isPreStepEnabled({ PONYTAIL_PRE_STEP: 'no' }), false)
+  assert.equal(isPreStepEnabled({ PONYTAIL_PRE_STEP: '1' }), true)
+  assert.equal(isPreStepEnabled({ PONYTAIL_PRE_STEP: ' YES ' }), true)
+})
+
+test('prestep: lastUserText reads strings, blocks and skips unreadable entries', () => {
+  assert.equal(lastUserText({ messages: ['plain'] }), 'plain')
+  assert.equal(lastUserText({ messages: [{ content: 'block' }] }), 'block')
+  assert.equal(lastUserText({ messages: [{ content: [{ text: 'a' }, { text: 'b' }] }] }), 'a\nb')
+  assert.equal(lastUserText({ messages: [{ content: 'first' }, { content: 'last' }] }), 'last')
+  assert.equal(lastUserText({ messages: [] }), undefined)
+  assert.equal(lastUserText({}), undefined)
+  assert.equal(lastUserText(null), undefined)
 })

@@ -1,6 +1,6 @@
 {
   "id": "ZhangYunfang/dsh-ponytail-v6",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "./lib/index.js",
   "description": "Ponytail 6 for DeepSeek Harness: upstream ponytail v5.3.3 ruleset and six skills verbatim, plus native live intensity switching (off/lite/full/ultra) as a cache-stable prompt section. Registers zero tools.",
   "engines": {

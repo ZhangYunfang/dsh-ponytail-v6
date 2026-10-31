@@ -4,8 +4,8 @@
 
 | 层 | 命令 | 覆盖 |
 |---|---|---|
-| 单元测试 | `npm test` | 18 个纯函数/模块级用例 |
-| 静态验收 | `node scripts/verify.mjs` | 68 项断言（技能完整性、档位语义、命令解析、状态解析链） |
+| 单元测试 | `npm test` | 26 个纯函数/模块级用例 |
+| 静态验收 | `node scripts/verify.mjs` | 78 项断言（技能完整性、档位语义、命令解析、状态解析链） |
 | 宿主契约探针 | `node scripts/probe-host.mjs` | 37 项断言（真实 cordis + 真实 SystemPrompt + 真实 WebServer + 5 种 scope） |
 | 客户端探针 | `node scripts/probe-client.mjs` | 22 项断言（真实 React 18 渲染 + 面板 HTTP 函数对真实宿主） |
 
@@ -31,6 +31,11 @@
    `stop ponytail and also fix the bug` 为假。
 10. **命令解析**：空参 = status；四档各自正确；非法参数返回 error 且**不改变状态**。
 11. **工作区条款不被过滤**：`lite`/`full`/`ultra` 三档都带该条款，`off` 不带。
+12. **版本一致性**：`package.json` / `dsh.plugin.json` / `CHANGELOG.md` 三者必须一致，
+    `engines.dsh` 两端一致，兼容矩阵必须存在。
+13. **waterfall 契约**（v1.1.1 新增，为 v1.1.0 的 P0 兜底）：监听器必须 `await next()` 恰好一次、
+    必须返回**同一个 decision 对象**、reject 决策原样透传、抛异常不破坏返回值、
+    默认关闭、且 `index.js` 不得出现无守卫的 `ctx.on('agent/pre-step', payload => …)`。
 
 ## 2. 宿主契约探针（37 项）
 

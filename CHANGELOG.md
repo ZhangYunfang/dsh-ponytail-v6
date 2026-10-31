@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.1.1] — 2026-10-31
+
+**修一个 P0：装上之后每一次对话都会失败。** 这个版本之前，插件一旦加载，宿主会在
+每一步抛 `TypeError: Cannot read properties of undefined (reading 'kind')`。
+
+### The bug
+
+`agent/pre-step` 是**协作 waterfall**（`packages/core/agent/src/runtime-types.ts:238`，
+发出点 `packages/core/agent-loop/src/agent.ts:244`）：每个监听器按 `(payload, next)` 被调用，
+**必须** `await next()` 并把拿到的 decision 原样返回。宿主随后执行
+
+```ts
+return decision.kind === 'reject' ? decision : { ...decision, assembly }
+```
+
+v1.1.0 的 `installDeactivationWatch` 注册的是 `ctx.on('agent/pre-step', payload => {…})` ——
+没有 `next`、隐式返回 `undefined`，于是整个 decision 变成 `undefined`，
+下一行读 `.kind` 就炸。**影响面是全部**：不是某个功能坏，是整个 agent 循环每步都挂。
+
+### Why the 32-assertion probe missed it
+
+探针只 `provide` 了假的 `skills` 与 `commands`，从没走过 `agent/pre-step` 的真实分发路径；
+而 `ctx.on` 在真 cordis 上合法存在，所以「不抛异常」被误当成「契约正确」。
+**教训：接缝能注册 ≠ 契约正确，waterfall 类事件必须验返回值。**
+
+### The fix
+
+- 新增 `lib/prestep.js`：监听器改成 `async (payload, next) => { const decision = await next(); …; return decision }`，
+  `next()` 无条件调用且在 try/catch 之外；启发式逻辑单独 try/catch，永不外溢。
+- **改为默认关闭、需显式开启**（`PONYTAIL_PRE_STEP=1`）。理由：这个功能的收益很小
+  （`/ponytail off` 命令已覆盖），但它的爆炸半径是全部 —— 默认关掉才是对的取舍。
+- 宿主不传 `next` 时监听器保持惰性（返回 undefined 无人读取），不再参与链条。
+
+### New gate
+
+静态验收新增**第 13 组：waterfall 契约**（10 项断言）——监听器必须调用 `next()` 恰好一次、
+必须返回**同一个 decision 对象**、reject 决策必须原样透传、抛异常的状态不得破坏返回值、
+默认必须是关闭、`index.js` 必须用 `isPreStepEnabled()` 守卫且不得出现无守卫的
+`ctx.on('agent/pre-step', payload => …)`。
+
+单测 18 → 26，静态断言 68 → 78。
+
 ## [1.1.0] — 2026-10-31
 
 关闭 1.0.0 遗留的两个「未验证」，全部变成可复跑的断言。
@@ -28,8 +70,8 @@
 
 ### Changed
 
-- `npm run verify` 现在是四层：静态 68 项 + 宿主探针 37 项 + 客户端探针 22 项，
-  加上 `npm test` 的 18 个单元测试。
+- `npm run verify` 现在是四层：静态 78 项 + 宿主探针 37 项 + 客户端探针 22 项，
+  加上 `npm test` 的 26 个单元测试。
 - 静态验收新增**第 12 组：版本一致性**（`package.json` / `dsh.plugin.json` /
   `CHANGELOG.md` 三者必须一致，`engines.dsh` 与兼容矩阵必须存在）。
   加它的直接原因：本次升 1.1.0 时 `dsh.plugin.json` 漏改，靠人眼才发现。
