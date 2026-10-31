@@ -1,0 +1,11 @@
+# dsh-ponytail-v6 bundle patch.
+#
+# Mounts one plugin row into the profile roster. The row is a bare package name:
+#   exports["."]      -> lib/index.js   host half (prompt section, skills, command, HTTP API)
+#   exports["./client"] -> lib/client.js browser half (settings section), optional
+#
+# Applied as a profile bundle layer over dsh-base. Later layers (the profile's own
+# cordis.patch.yml and --patch overlays) can still address this row by id.
+- insert:
+    - id: ponytail
+      name: 'dsh-ponytail-v6'
