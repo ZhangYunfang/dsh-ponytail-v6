@@ -1,14 +1,17 @@
 # 验收说明
 
-三层验收，全部可复跑。任何一层失败都不算通过。
+四层验收，全部可复跑。任何一层失败都不算通过。
 
 | 层 | 命令 | 覆盖 |
 |---|---|---|
 | 单元测试 | `npm test` | 18 个纯函数/模块级用例 |
 | 静态验收 | `node scripts/verify.mjs` | 63 项断言（技能完整性、档位语义、命令解析、状态解析链） |
-| 真机契约探针 | `node scripts/probe-host.mjs` | 32 项断言（真实 cordis + 真实 SystemPrompt + 真实 WebServer） |
+| 宿主契约探针 | `node scripts/probe-host.mjs` | 37 项断言（真实 cordis + 真实 SystemPrompt + 真实 WebServer + 5 种 scope） |
+| 客户端探针 | `node scripts/probe-client.mjs` | 22 项断言（真实 React 18 渲染 + 面板 HTTP 函数对真实宿主） |
 
-一次跑完：`npm run verify`（静态 + 探针）。
+一次跑完：`npm run verify`（后三层）。
+
+> 两个探针都会在挂载插件前把 `DSH_HOME` 指向临时目录，**跑验证不会写真实 `~/.dsh`**，也不启动 dsh-web。
 
 ---
 
@@ -29,7 +32,7 @@
 10. **命令解析**：空参 = status；四档各自正确；非法参数返回 error 且**不改变状态**。
 11. **工作区条款不被过滤**：`lite`/`full`/`ultra` 三档都带该条款，`off` 不带。
 
-## 2. 真机契约探针（32 项）
+## 2. 宿主契约探针（37 项）
 
 `scripts/probe-host.mjs` 用**真实包**搭一个 cordis Context：
 
@@ -37,7 +40,7 @@
 - `packages/core/system-prompt` 的真 `SystemPrompt`
 - `@deepseek-ai/dsh-host-webserver` 的真 `WebServer`（绑 `127.0.0.1:0`，用系统分配端口）
 
-然后挂载本插件，验证六组：
+然后挂载本插件，验证七组：
 
 1. 真实服务能起来、WebServer 在监听。
 2. `apply()` 不抛、技能提供者与命令各注册一次。
@@ -47,8 +50,30 @@
    `PONYTAIL MODE ACTIVE`、切档后变成 `level: ultra`、含工作区条款。
 6. **HTTP API 端到端**：`/ponytail/state` 200、`/ponytail/mode` 200 且生效、
    非法档 400、坏 JSON 400、错方法 405、未知路径 404、关总开关后 section 真的消失。
+7. **子代理继承**：用 5 种 scope 形状（无 scope / 空对象 / 字符串键 / Symbol / 嵌套对象）
+   逐个 `assemble({ scope })`，全部都能拿到规则集。
 
-探针不启动 dsh-web、不写 `~/.dsh`（状态目录重定向到临时目录），结束时 `process.exit`。
+第 7 组的依据：`ScopedLayers.merge(scope, pick)` 先铺 **global 层**再用 scope 链覆盖
+（`packages/core/scope/lib/index.js:177-181`），而本插件注册在 profile 根的全局上下文，
+所以任何 agent scope 都包含它 —— 探针把这句论断变成了 5 条断言。
+
+探针不启动 dsh-web、`DSH_HOME` 重定向到临时目录、结束时 `process.exit`。
+
+## 2b. 客户端探针（22 项）
+
+`scripts/probe-client.mjs` 不靠浏览器也不靠"跟别的插件写法一样"这种说法：
+
+1. 用桩替换 `window.__ModuleLoader__`，按 DSH 加载器**真实信封**加载 `lib/client.js`；
+   断言 `id` 正确、导出 `apply`、`inject` 含 `slots`。
+2. 在假 `ctx`（只实现 `slots.inject` / `slots.register`）上执行 `apply()`，
+   断言注册了且仅注册一个 `settings.section`，`id=ponytail-v6`、`order` 有限、
+   `label()` 返回 `Ponytail`。
+3. 用**真实 React 18.3.1 + react-dom/server** 的 `renderToStaticMarkup` 渲染面板：
+   断言不抛错，输出含插件名、Off/Lite/Full/Ultra 四个按钮、档位徽标、默认值来源行。
+4. 把面板**自己的** `readState()` / `post()` 打到宿主半的**真实 WebServer**：
+   断言读状态、切档生效、400 错误透传成 Error、总开关可切换。
+
+第 4 组是这层的价值所在：它证明浏览器半与宿主半的 HTTP 契约真的对得上，而不是各写各的。
 
 ## 3. 安装后的真机验收（需要重启 DSH）
 

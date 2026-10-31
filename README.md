@@ -116,14 +116,17 @@ flowchart TB
 ## 验证
 
 ```bash
-npm run verify   # 63 项断言 + 32 项真机契约探针
+npm run verify   # 63 静态 + 37 宿主探针 + 22 客户端探针
 npm test         # 18 个单元测试
 ```
 
-`npm run verify` 做两件事：
+`npm run verify` 跑三层，全部可复跑：
 
 1. **静态验收**（`scripts/verify.mjs`，63 项）：技能 sha256 与 `upstream.lock.json` 全等、名字合法、描述不超预算、provider 能列出并加载 6 个技能、四档文本互异、`full` 保留四大条款、`ultra` 不出现 HB 的反转、档位解析四层、`stop ponytail` 不误触发、命令解析、工作区条款不被过滤掉。
-2. **真机契约探针**（`scripts/probe-host.mjs`，32 项）：用**真实 cordis + 真实 SystemPrompt + 真实 WebServer** 挂载本插件，验证 prompt 真的进了组装结果、切档实时生效、HTTP API 全状态码正确、关闭后 section 真的消失。不启动 dsh-web、不碰 `~/.dsh`。
+2. **宿主契约探针**（`scripts/probe-host.mjs`，37 项）：用**真实 cordis + 真实 SystemPrompt + 真实 WebServer** 挂载本插件，验证 prompt 真的进了组装结果、切档实时生效、HTTP API 全状态码正确、关闭后 section 真的消失，以及 **5 种 scope 形状都能拿到规则集**（子代理继承）。
+3. **客户端探针**（`scripts/probe-client.mjs`，22 项）：按 DSH 加载器信封加载浏览器半，用**真实 React 18.3.1 + react-dom/server** 渲染设置页面板，并把面板自己的 `readState()`/`post()` 打到宿主半的真实 WebServer 上验四种交互。
+
+两个探针都把 `DSH_HOME` 指向临时目录，**跑验证不会写你的 `~/.dsh`**，也不启动 dsh-web。
 
 ## 跟随上游
 
@@ -136,10 +139,10 @@ UPSTREAM_REPO=git@github.com:DietrichGebert/ponytail.git npm run sync-upstream
 
 ## 已知边界
 
-- **UI 面板未在真浏览器里验证过**。挂载方式与同机跑通的 `dsh-skill-studio` 完全一致，且整段 `try/catch`；即便不渲染，host 侧三个接缝照常工作。
+- 面板的**视觉效果**（配色、间距、暗色主题下的观感）没有截图证据；已验证的是「能加载、能注册、能渲染出正确结构、交互函数与宿主一致」。
 - `stop ponytail` 的自然语言触发依赖 `agent/pre-step` 事件存在且载荷形状可识别；识别不到就静默不生效（用 `/ponytail off` 兜底）。
-- 子代理是否继承 prompt section 未验证（`ctx.systemPrompt` 按 agent 作用域）。子代理至少能通过技能获得规则。
 - 兼容矩阵目前只声明 `0.1.2-alpha.2`（本机实测）。其它版本未验证就不写。
+- 探针证明的是**契约匹配**，不等于「真的挂进了正在跑的 dsh-web」——那一步需要安装 + 重启，见 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md) §3。
 
 ## 许可
 
@@ -152,6 +155,6 @@ MIT。插件代码 © ZhangYunfang；规则与技能正文 © Dietrich Gebert（
 A DeepSeek Harness port of [ponytail](https://github.com/DietrichGebert/ponytail): the upstream v5.3.3 ruleset and all six skills are shipped **byte-for-byte** (`upstream.lock.json` records their sha256), plus what upstream cannot offer on DSH — live intensity switching.
 
 - **Four seams, all public DSH APIs**: `systemPrompt.section` (re-evaluated per assembly, so an unchanged level keeps the prompt prefix identical and the KV cache warm), `skills.registerProvider` (host plane, so every preset sees the skills), `commands.register` (`/ponytail [level]`, never reaches the model, zero tokens), `slots.inject('settings.section')` (optional panel).
-- **Verification**: `npm run verify` runs 63 static assertions plus a 32-assertion host-contract probe against a real cordis context with the real SystemPrompt and WebServer.
+- **Verification**: `npm run verify` runs 63 static assertions, a 37-assertion host-contract probe (real cordis + real SystemPrompt + real WebServer, including five scope shapes to prove subagents inherit the ruleset), and a 22-assertion client probe (real React server rendering plus the panel's own HTTP helpers against the real host API).
 - **Honest about cost**: the upstream "−26% cost" comes from 22% fewer turns, not from shorter code. Measured on a real 79-step DSH session, output is 0.27% of tokens and 7.9% of cost. The value here is code quality and maintainability.
 - **No tools registered**, no `AGENTS.md` writes, no model routing changes. Workspace instructions always outrank this block.

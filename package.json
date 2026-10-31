@@ -1,6 +1,6 @@
 {
   "name": "dsh-ponytail-v6",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Ponytail 6 for DeepSeek Harness: the upstream v5.3.3 ruleset and six skills verbatim, plus native live intensity switching (off/lite/full/ultra) as a cache-stable prompt section. Zero tools.",
   "type": "module",
   "license": "MIT",
@@ -28,10 +28,11 @@
   ],
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "verify": "node scripts/verify.mjs && node scripts/probe-host.mjs",
+    "verify": "node scripts/verify.mjs && node scripts/probe-host.mjs && node scripts/probe-client.mjs",
     "lock": "node scripts/record-lock.mjs",
     "sync-upstream": "bash scripts/sync-upstream.sh",
-    "probe": "node scripts/probe-host.mjs"
+    "probe:host": "node scripts/probe-host.mjs",
+    "probe:client": "node scripts/probe-client.mjs"
   },
   "keywords": [
     "dsh",

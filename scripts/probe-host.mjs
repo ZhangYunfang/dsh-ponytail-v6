@@ -62,7 +62,10 @@ const { Context } = requireFromProfile('@deepseek-ai/cordis')
 const { SystemPrompt } = requireFromCheckout(join(CHECKOUT, 'packages', 'core', 'system-prompt', 'lib', 'index.js'))
 const { WebServer } = requireFromProfile('@deepseek-ai/dsh-host-webserver')
 
+// Redirect the plugin's state directory into a temp dir BEFORE the plugin loads,
+// so a probe run can never write into the real ~/.dsh.
 const stateDir = mkdtempSync(join(tmpdir(), 'pt-probe-'))
+process.env.DSH_HOME = stateDir
 const ctx = new Context()
 
 /** @type {Array<Record<string, unknown>>} */
@@ -186,6 +189,36 @@ try {
   check('POST /ponytail/enabled -> 200', disable.status === 200, `status=${disable.status}`)
   const disabledAssembly = await ctx.systemPrompt.assemble({})
   check('disabling removes the section from the prompt', JSON.stringify(disabledAssembly).includes('PONYTAIL MODE ACTIVE') === false)
+
+  // Re-enable: section 6 turned the master switch off on purpose.
+  await fetch(`${base}/ponytail/enabled`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ enabled: true }),
+  })
+
+  console.log('\n7. the section is scope-independent, so subagents inherit it')
+  // SystemPrompt merges per-scope layers ON TOP of the global layer, and this plugin
+  // registers on the profile-root (global) context, so every agent scope sees it.
+  // Verified empirically across several scope shapes rather than argued from source.
+  const scopeShapes = [
+    ['no scope', undefined],
+    ['empty object', {}],
+    ['string key', 'agent:child'],
+    ['symbol token', Symbol('agent')],
+    ['nested object', { id: 'child', parent: 'root' }],
+  ]
+  for (const [label, scope] of scopeShapes) {
+    let rendered = ''
+    let scopeError
+    try {
+      rendered = JSON.stringify(await ctx.systemPrompt.assemble({ scope }))
+    } catch (error) {
+      scopeError = error
+    }
+    check(`${label} receives the ruleset`, scopeError === undefined && rendered.includes('PONYTAIL MODE ACTIVE'),
+      scopeError?.message ?? 'section missing from the assembly')
+  }
 
   console.log(`\n${passed} passed, ${failed} failed`)
   if (failed > 0) {

@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.1.0] — 2026-10-31
+
+关闭 1.0.0 遗留的两个「未验证」，全部变成可复跑的断言。
+
+### Verified (previously unverified)
+
+- **设置页面板现在有真渲染证据**。新增 `scripts/probe-client.mjs`（22 项断言）：
+  - 用桩替换 `window.__ModuleLoader__`，按 DSH 加载器的真实信封加载 `lib/client.js`；
+  - 在假 `ctx` 上执行 `apply()`，断言注册了且仅注册了一个 `settings.section`
+    （`id=ponytail-v6`、`order` 有限、`label()` 返回 `Ponytail`）；
+  - 用**真实 React 18.3.1 + react-dom/server** 的 `renderToStaticMarkup` 渲染面板，
+    断言不抛错且输出含插件名与 Off/Lite/Full/Ultra 四个按钮、档位徽标、默认值来源行；
+  - 把面板**自己的** `readState()` / `post()` 直接打到**宿主半的真实 WebServer** 上，
+    断言读状态、切档、400 错误透传、总开关四种交互全部与宿主一致。
+- **子代理继承已实测，不再靠推断**。`SystemPrompt.merge(scope, …)` 永远以 global 层为基底，
+  而本插件注册在 profile 根的全局上下文，所以任何 agent scope 都能看到规则集。
+  探针用 5 种 scope 形状（无 scope / 空对象 / 字符串键 / Symbol / 嵌套对象）逐个
+  `assemble({ scope })` 验过，全部拿到规则集。
+
+### Fixed
+
+- **探针不再写真实 `~/.dsh`**。此前 `probe-host` 通过 HTTP 改档位会落到
+  `~/.dsh/ponytail/config.json`；现在两个探针在挂载插件前把 `DSH_HOME` 指向临时目录，
+  结束后删除，跑探针绝不污染用户的 home。
+- 面板徽标断言改成正则（`level <mode>` 或 `loading`），不再依赖加载中文本的措辞。
+
+### Changed
+
+- `npm run verify` 现在是四层：静态 63 项 + 宿主探针 37 项 + 客户端探针 22 项，
+  加上 `npm test` 的 18 个单元测试。
+
+### Known limits (still true)
+
+- 兼容矩阵仍只声明 `0.1.2-alpha.2`。
+- 面板的**视觉效果**（配色、间距、暗色主题下的观感）没有截图证据，只验了渲染与交互。
+- `stop ponytail` 的自然语言触发依赖 `agent/pre-step` 事件形状；识别不到时静默不生效。
+
 ## [1.0.0] — 2026-10-31
 
 首个发布版：把上游 ponytail v5.3.3 完整移植到 DeepSeek Harness，并补上 DSH 独有能力。
